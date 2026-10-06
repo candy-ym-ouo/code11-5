@@ -116,16 +116,49 @@ export interface Person {
   id: string;
   familyId: string;
   name: string;
+  aliases: string[];
   relation: string | null;
+  relationNote: string | null;
   birthYear: number | null;
   deathYear: number | null;
   bio: string | null;
   itemCount: number;
+  mergedIntoId: string | null;
+  mergedInto: { id: string; name: string } | null;
+  createdAt: string;
+}
+
+export interface PersonMergeRecord {
+  id: string;
+  sourceId: string;
+  sourceName: string;
+  targetId: string;
+  targetName: string;
+  itemCount: number;
+  undone: boolean;
+  undoneAt: string | null;
   createdAt: string;
 }
 
 export interface PersonDetail extends Person {
   items: (Item & { role: PersonRole })[];
+  mergeHistory: PersonMergeRecord[];
+}
+
+export interface MergePreviewItem {
+  linkId: string;
+  role: PersonRole;
+  item: Item;
+}
+
+export interface MergePreview {
+  source: Person;
+  target: Person;
+  movable: MergePreviewItem[];
+  conflicts: MergePreviewItem[];
+  movedCount: number;
+  conflictCount: number;
+  totalCount: number;
 }
 
 export interface Member {

@@ -94,6 +94,7 @@ export const ACTION_LABELS: Record<string, string> = {
   'person.update': '修改人物',
   'person.delete': '删除人物',
   'person.merge': '合并人物',
+  'person.merge_undo': '撤销合并人物',
   'item.create': '新建条目',
   'item.update': '修改条目',
   'item.publish': '发布条目',

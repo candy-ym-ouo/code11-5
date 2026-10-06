@@ -102,16 +102,22 @@ export function toItemDto(
   };
 }
 
-export function toPersonDto(p: Person & { _count?: { links: number } }) {
+export function toPersonDto(
+  p: Person & { _count?: { links: number }; mergedInto?: Pick<Person, 'id' | 'name'> | null },
+) {
   return {
     id: p.id,
     familyId: p.familyId,
     name: p.name,
+    aliases: p.aliases,
     relation: p.relation,
+    relationNote: p.relationNote,
     birthYear: p.birthYear,
     deathYear: p.deathYear,
     bio: p.bio,
     itemCount: p._count?.links ?? 0,
+    mergedIntoId: p.mergedIntoId,
+    mergedInto: p.mergedInto ? { id: p.mergedInto.id, name: p.mergedInto.name } : null,
     createdAt: p.createdAt.toISOString(),
   };
 }

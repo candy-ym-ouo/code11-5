@@ -189,7 +189,9 @@ model Person {
   id            String    @id @default(cuid())
   familyId      String    @map("family_id")
   name          String
+  aliases       String[]  @default([])
   relation      String?
+  relationNote  String?   @map("relation_note")
   birthYear     Int?      @map("birth_year")
   deathYear     Int?      @map("death_year")
   bio           String?
@@ -200,11 +202,35 @@ model Person {
   updatedAt     DateTime  @updatedAt @map("updated_at")
   deletedAt     DateTime? @map("deleted_at")
 
-  family Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  links  ItemPerson[]
+  family      Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  links       ItemPerson[]
+  mergedInto  Person?      @relation("PersonMergeTree", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedFrom  Person[]     @relation("PersonMergeTree")
+  merges      PersonMerge[] @relation("PersonMergeSource")
+  mergeTarget PersonMerge[] @relation("PersonMergeTarget")
 
   @@index([familyId, name])
   @@map("people")
+}
+
+model PersonMerge {
+  id        String   @id @default(cuid())
+  familyId  String   @map("family_id")
+  sourceId  String   @map("source_id")
+  targetId  String   @map("target_id")
+  // 合并前的全部关联明细；撤销时照此原样挂回，重复/冲突关联也保留了去向
+  snapshot  Json
+  undoneAt  DateTime? @map("undone_at")
+  createdBy String   @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  source Person @relation("PersonMergeSource", fields: [sourceId], references: [id], onDelete: Cascade)
+  target Person @relation("PersonMergeTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([familyId, createdAt])
+  @@index([sourceId])
+  @@index([targetId])
+  @@map("person_merges")
 }
 
 model Item {

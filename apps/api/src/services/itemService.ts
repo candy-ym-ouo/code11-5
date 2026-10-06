@@ -90,7 +90,13 @@ export async function listItems(
         { storageLocation: contains },
         { acquiredLabel: contains },
         { tags: { has: query.q } },
-        { people: { some: { person: { name: contains } } } },
+        {
+          people: {
+            some: {
+              person: { OR: [{ name: contains }, { aliases: { has: query.q } }] },
+            },
+          },
+        },
         { media: { some: { deletedAt: null, transcript: contains } } },
       ],
     });

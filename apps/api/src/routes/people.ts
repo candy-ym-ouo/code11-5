@@ -66,6 +66,18 @@ peopleRouter.delete(
 );
 
 peopleRouter.post(
+  '/:personId/merge/preview',
+  requireFamily('person:delete'),
+  validateBody(mergePersonSchema),
+  asyncHandler(async (req, res) => {
+    const user = currentUser(req);
+    const ctx = familyCtx(req);
+    const preview = await personService.previewMerge(user.id, ctx, req.params.personId!, req.body.targetPersonId);
+    res.json({ preview });
+  }),
+);
+
+peopleRouter.post(
   '/:personId/merge',
   requireFamily('person:delete'),
   writeLimiter,
@@ -80,6 +92,18 @@ peopleRouter.post(
       req.body.targetPersonId,
       clientMeta(req),
     );
+    res.json({ person });
+  }),
+);
+
+peopleRouter.post(
+  '/merges/:mergeId/undo',
+  requireFamily('person:delete'),
+  writeLimiter,
+  asyncHandler(async (req, res) => {
+    const user = currentUser(req);
+    const ctx = familyCtx(req);
+    const person = await personService.undoMerge(user.id, ctx, req.params.mergeId!, clientMeta(req));
     res.json({ person });
   }),
 );

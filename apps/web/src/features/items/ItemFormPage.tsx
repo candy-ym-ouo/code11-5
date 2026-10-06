@@ -347,7 +347,8 @@ export function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
                       />
                       <span>
                         {p.name}
-                        {p.relation ? <span className="muted">（{p.relation}）</span> : null}
+                        {p.aliases.length > 0 ? <span className="muted">（{p.aliases[0]}）</span> : null}
+                        {!p.aliases.length && p.relation ? <span className="muted">（{p.relation}）</span> : null}
                       </span>
                     </label>
                     {selected ? (

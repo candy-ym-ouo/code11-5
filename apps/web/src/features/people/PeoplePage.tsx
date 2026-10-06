@@ -5,6 +5,7 @@ import { api, ApiError } from '../../api/client';
 import { Button, EmptyState, Field, Modal, Spinner, TextArea, TextInput } from '../../components/ui';
 import { useToast } from '../../components/Toast';
 import { useFamily } from '../families/useFamily';
+import { splitAliases } from './utils';
 import type { Person } from '../../api/types';
 
 export function PeoplePage() {
@@ -13,7 +14,15 @@ export function PeoplePage() {
   const { push } = useToast();
   const { data: familyData } = useFamily(fid);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ name: '', relation: '', birthYear: '', deathYear: '', bio: '' });
+  const [form, setForm] = useState({
+    name: '',
+    aliases: '',
+    relation: '',
+    relationNote: '',
+    birthYear: '',
+    deathYear: '',
+    bio: '',
+  });
   const [q, setQ] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -27,7 +36,9 @@ export function PeoplePage() {
     mutationFn: () =>
       api.post(`/families/${fid}/people`, {
         name: form.name.trim(),
+        aliases: splitAliases(form.aliases),
         relation: form.relation.trim() || null,
+        relationNote: form.relationNote.trim() || null,
         birthYear: form.birthYear ? Number(form.birthYear) : null,
         deathYear: form.deathYear ? Number(form.deathYear) : null,
         bio: form.bio.trim() || null,
@@ -35,7 +46,7 @@ export function PeoplePage() {
     onSuccess: async () => {
       push('人物已建立', 'success');
       setOpen(false);
-      setForm({ name: '', relation: '', birthYear: '', deathYear: '', bio: '' });
+      setForm({ name: '', aliases: '', relation: '', relationNote: '', birthYear: '', deathYear: '', bio: '' });
       await queryClient.invalidateQueries({ queryKey: ['people', fid] });
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : '保存失败'),
@@ -87,6 +98,11 @@ export function PeoplePage() {
           {people.map((p) => (
             <Link key={p.id} to={`/f/${fid}/people/${p.id}`} className="item-card" style={{ padding: 'var(--space-4)' }}>
               <h2>{p.name}</h2>
+              {p.aliases.length > 0 ? (
+                <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>
+                  又名：{p.aliases.join('、')}
+                </div>
+              ) : null}
               <div className="item-card__meta">
                 {p.relation ? <span>{p.relation}</span> : null}
                 {p.birthYear ? <span>· {p.birthYear}{p.deathYear ? `–${p.deathYear}` : ''}</span> : null}
@@ -123,8 +139,22 @@ export function PeoplePage() {
         <Field label="称呼" required hint="例如「外公」「王阿姨」">
           <TextInput value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} autoFocus />
         </Field>
-        <Field label="关系" hint="例如「外公」「老同事」">
+        <Field label="别名" hint="选填，多个别名用顿号或逗号隔开，如「老王、王建国」">
+          <TextInput
+            value={form.aliases}
+            onChange={(e) => setForm((p) => ({ ...p, aliases: e.target.value }))}
+            placeholder="老王、王建国"
+          />
+        </Field>
+        <Field label="关系" hint="一句话关系，例如「外公」「母亲的老同事」">
           <TextInput value={form.relation} onChange={(e) => setForm((p) => ({ ...p, relation: e.target.value }))} />
+        </Field>
+        <Field label="关系描述" hint="选填，多写几句渊源，比如怎么认识的、往来情况">
+          <TextArea
+            value={form.relationNote}
+            onChange={(e) => setForm((p) => ({ ...p, relationNote: e.target.value }))}
+            maxLength={500}
+          />
         </Field>
         <div className="form-grid">
           <Field label="出生年份">
