@@ -72,7 +72,9 @@ export const updateMemberSchema = z.discriminatedUnion('op', [
 
 export const personSchema = z.object({
   name: trimmed(60),
+  aliases: z.array(trimmed(40)).max(10).optional(),
   relation: optionalText(40),
+  relationNote: optionalText(500),
   birthYear: z.number().int().min(1800).max(2200).optional().nullable(),
   deathYear: z.number().int().min(1800).max(2200).optional().nullable(),
   bio: optionalText(2000),
@@ -86,6 +88,7 @@ export const mergePersonSchema = z.object({
 export const itemPersonSchema = z.object({
   personId: z.string().cuid(),
   role: z.enum(PERSON_ROLES).default('source'),
+  note: optionalText(200),
 });
 
 export const itemBaseSchema = z.object({

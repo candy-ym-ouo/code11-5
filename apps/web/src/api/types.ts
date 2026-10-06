@@ -56,7 +56,9 @@ export interface Media {
 export interface ItemPerson {
   personId: string;
   role: PersonRole;
+  note: string | null;
   name: string;
+  aliases: string[];
   relation: string | null;
 }
 
@@ -116,16 +118,60 @@ export interface Person {
   id: string;
   familyId: string;
   name: string;
+  aliases: string[];
   relation: string | null;
+  relationNote: string | null;
   birthYear: number | null;
   deathYear: number | null;
   bio: string | null;
+  mergedIntoId: string | null;
   itemCount: number;
   createdAt: string;
 }
 
+export interface PersonMergeRecord {
+  id: string;
+  sourceId: string;
+  sourceName: string;
+  targetId: string;
+  targetName: string;
+  undone: boolean;
+  undoneAt: string | null;
+  createdAt: string;
+}
+
+export interface PersonMergePreviewEntry {
+  linkId: string;
+  itemId: string;
+  itemTitle: string;
+  category: Category | null;
+  status: ItemStatus | null;
+  role: PersonRole;
+  sourceNote: string | null;
+  targetNote: string | null;
+  conflict: boolean;
+}
+
+export interface PersonMergePreview {
+  source: Person;
+  target: Person;
+  moved: PersonMergePreviewEntry[];
+  conflicts: PersonMergePreviewEntry[];
+  movedCount: number;
+  conflictCount: number;
+  hiddenCount: number;
+}
+
+export interface MergedPersonConflict {
+  merged: boolean;
+  person: Person;
+  mergedInto: { id: string; name: string } | null;
+  merges: PersonMergeRecord[];
+}
+
 export interface PersonDetail extends Person {
-  items: (Item & { role: PersonRole })[];
+  items: (Item & { role: PersonRole; note: string | null })[];
+  merges: PersonMergeRecord[];
 }
 
 export interface Member {

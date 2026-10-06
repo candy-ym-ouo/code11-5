@@ -221,10 +221,13 @@ export function ItemDetailPage() {
                     <span className="muted">未记录</span>
                   ) : (
                     item.people.map((p) => (
-                      <Link key={`${p.personId}-${p.role}`} to={`/f/${fid}/people/${p.personId}`} className="tag" style={{ marginRight: 6 }}>
-                        {p.name}
-                        {p.relation ? `·${p.relation}` : ''}
-                      </Link>
+                      <span key={`${p.personId}-${p.role}`} style={{ display: 'inline-flex', flexDirection: 'column', marginRight: 6, marginBottom: 4 }}>
+                        <Link to={`/f/${fid}/people/${p.personId}`} className="tag">
+                          {p.name}
+                          {p.relation ? `·${p.relation}` : ''}
+                        </Link>
+                        {p.note ? <small className="muted" style={{ marginTop: 2, maxWidth: 220 }}>{p.note}</small> : null}
+                      </span>
                     ))
                   )}
                 </span>

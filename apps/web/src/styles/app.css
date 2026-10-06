@@ -283,6 +283,19 @@
   white-space: nowrap;
 }
 
+/* ---------- 合并预览 / 合并历史 ---------- */
+.merge-list__item {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.merge-history__item:last-child {
+  border-bottom: none !important;
+}
+
 .tag--warn {
   background: var(--warn-soft);
   color: var(--warn);

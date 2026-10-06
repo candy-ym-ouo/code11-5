@@ -32,7 +32,7 @@ export interface ItemInput {
   storageLocation?: string | null;
   tags?: string[];
   visibility?: Visibility;
-  people?: { personId: string; role: string }[];
+  people?: { personId: string; role: string; note?: string | null }[];
   sharedWith?: { userId: string; canEdit: boolean }[];
 }
 
@@ -90,7 +90,11 @@ export async function listItems(
         { storageLocation: contains },
         { acquiredLabel: contains },
         { tags: { has: query.q } },
-        { people: { some: { person: { name: contains } } } },
+        {
+          people: {
+            some: { person: { OR: [{ name: contains }, { aliases: { has: query.q } }] } },
+          },
+        },
         { media: { some: { deletedAt: null, transcript: contains } } },
       ],
     });
@@ -222,7 +226,13 @@ export async function createItem(userId: string, ctx: FamilyContext, input: Item
         sortAt: sortValue,
         createdBy: userId,
         people: input.people?.length
-          ? { create: input.people.map((p) => ({ personId: p.personId, role: p.role as never })) }
+          ? {
+              create: input.people.map((p) => ({
+                personId: p.personId,
+                role: p.role as never,
+                note: p.note ?? null,
+              })),
+            }
           : undefined,
         shares: input.sharedWith?.length
           ? { create: input.sharedWith.map((s) => ({ userId: s.userId, canEdit: s.canEdit })) }
@@ -327,7 +337,12 @@ export async function updateItem(
       await tx.itemPerson.deleteMany({ where: { itemId } });
       if (input.people.length) {
         await tx.itemPerson.createMany({
-          data: input.people.map((p) => ({ itemId, personId: p.personId, role: p.role as never })),
+          data: input.people.map((p) => ({
+            itemId,
+            personId: p.personId,
+            role: p.role as never,
+            note: p.note ?? null,
+          })),
         });
       }
     }

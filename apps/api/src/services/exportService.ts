@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import archiver from 'archiver';
-import { CATEGORY_LABELS, ITEM_STATUS_LABELS, VISIBILITY_LABELS, formatAcquired, htmlToText } from '@heirloom/shared';
+import { CATEGORY_LABELS, ITEM_STATUS_LABELS, PERSON_ROLE_LABELS, VISIBILITY_LABELS, formatAcquired, htmlToText } from '@heirloom/shared';
 import type { Job } from '@prisma/client';
 import { prisma } from '../db';
 import { config } from '../config';
@@ -137,6 +137,12 @@ export async function buildExportZip(job: Job): Promise<{ file: string; items: n
       `- 分类：${CATEGORY_LABELS[item.category]}`,
       `- 获得时间：${acquired}${item.acquiredNote ? `（${item.acquiredNote}）` : ''}`,
       `- 来源人物：${peopleNames || '未记录'}`,
+      ...(item.people.length
+        ? item.people.map(
+            (p) =>
+              `  - ${p.person.name}（${PERSON_ROLE_LABELS[p.role]}${p.person.aliases.length ? `；别名：${p.person.aliases.join('、')}` : ''}）${p.note ? `：${p.note}` : ''}`,
+          )
+        : []),
       `- 地点：${[item.placeProvince, item.placeCity, item.placeText].filter(Boolean).join(' ') || '未记录'}`,
       `- 存放位置：${item.storageLocation ?? '未记录'}`,
       `- 保存状况：${item.condition ?? '未记录'}`,

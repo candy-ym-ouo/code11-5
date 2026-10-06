@@ -96,7 +96,9 @@ export function toItemDto(
     people: (item.people ?? []).map((ip) => ({
       personId: ip.personId,
       role: ip.role,
+      note: ip.note,
       name: ip.person.name,
+      aliases: ip.person.aliases,
       relation: ip.person.relation,
     })),
   };
@@ -107,10 +109,13 @@ export function toPersonDto(p: Person & { _count?: { links: number } }) {
     id: p.id,
     familyId: p.familyId,
     name: p.name,
+    aliases: p.aliases,
     relation: p.relation,
+    relationNote: p.relationNote,
     birthYear: p.birthYear,
     deathYear: p.deathYear,
     bio: p.bio,
+    mergedIntoId: p.mergedIntoId,
     itemCount: p._count?.links ?? 0,
     createdAt: p.createdAt.toISOString(),
   };

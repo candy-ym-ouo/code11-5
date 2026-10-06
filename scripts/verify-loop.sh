@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # 端到端闭环验证：用真实 HTTP 请求走完
-# 注册 → 建家庭 → 建人物 → 建档 → 上传图片/音频 → 发布 → 补充故事 → 邀请成员 →
-# 权限边界 → 私密条目隔离 → 导出 ZIP → 审计留痕 → 回收站。
+# 注册 → 建家庭 → 建人物（别名/关系说明）→ 建档 → 上传图片/音频 → 发布 → 补充故事 →
+# 人物合并预览/冲突/撤销还原 → 邀请成员 → 权限边界 → 私密条目隔离 →
+# 导出 ZIP → 审计留痕 → 回收站。
 #
 # 用法：API=http://127.0.0.1:4000 bash scripts/verify-loop.sh
 set -euo pipefail
@@ -134,6 +135,89 @@ for spec in "souvenir|结婚时的搪瓷缸" "receipt|1983 年的自行车发票
   code=$(req POST "$V1/families/$FID/items" "$JAR_A" "{\"title\":\"$title\",\"category\":\"$cat\",\"acquiredPrecision\":\"unknown\",\"acquiredLabel\":\"记不清了\",\"placeText\":\"老家\"}" "$TOKEN_A")
   expect "$code" 201 "创建条目（$cat）"
 done
+
+# ---- 人物别名 + 关联关系描述 ----
+code=$(req PATCH "$V1/families/$FID/people/$PID" "$JAR_A" '{"aliases":["老张","外公"," Grandpa "],"relationNote":"母亲的父亲，绍兴人"}' "$TOKEN_A")
+expect "$code" 200 "更新人物：别名与关系说明"
+ALIASES=$(json 'JSON.stringify(d.person.aliases)' < "$WORK/body")
+if [ "$ALIASES" = '["老张","Grandpa"]' ]; then ok "别名去重（剔重名/去空白）后为 $ALIASES"; else bad "别名规范化异常：$ALIASES"; fi
+
+# 给条目上的人物关联加关系描述
+code=$(req PATCH "$V1/families/$FID/items/$IID" "$JAR_A" "{\"people\":[{\"personId\":\"$PID\",\"role\":\"source\",\"note\":\"外公从木器社退休那年送的\"}]}" "$TOKEN_A")
+expect "$code" 200 "条目人物关联保存关系描述"
+LINK_NOTE=$(json 'd.item.people[0].note' < "$WORK/body")
+if [ "$LINK_NOTE" = "外公从木器社退休那年送的" ]; then ok "关联关系描述原样返回"; else bad "关联关系描述异常：$LINK_NOTE"; fi
+
+# 按别名也能搜到人物
+code=$(req GET "$V1/families/$FID/people?q=$(node -e 'process.stdout.write(encodeURIComponent("老张"))')" "$JAR_A" "" "$TOKEN_A")
+expect "$code" 200 "别名搜索人物"
+if [ "$(json 'd.people.find(p=>p.id===process.argv[1])?"yes":"no"' "$PID" < "$WORK/body")" = "yes" ]; then ok "用别名「老张」能搜到外公"; else bad "别名搜索未命中"; fi
+
+# ---- 合并人物：冲突预览 → 合并 → 历史追溯 → 撤销还原 ----
+code=$(req POST "$V1/families/$FID/people" "$JAR_A" '{"name":"外祖父","relation":"外公（另一张档案卡）"}' "$TOKEN_A")
+expect "$code" 201 "新建重复人物「外祖父」"
+PID2=$(json 'd.person.id' < "$WORK/body")
+
+# 外祖父也关联到同一条目、同一角色 → 构成冲突；另建一条只属于外祖父的条目
+code=$(req PATCH "$V1/families/$FID/items/$IID" "$JAR_A" "{\"people\":[{\"personId\":\"$PID\",\"role\":\"source\",\"note\":\"外公从木器社退休那年送的\"},{\"personId\":\"$PID2\",\"role\":\"source\",\"note\":\"档案卡上写作外祖父\"}]}" "$TOKEN_A")
+expect "$code" 200 "同一人物两种叫法同时关联（制造合并冲突）"
+code=$(req POST "$V1/families/$FID/items" "$JAR_A" "{\"title\":\"外祖父留下的铜墨盒\",\"category\":\"souvenir\",\"people\":[{\"personId\":\"$PID2\",\"role\":\"gifted\"}]}" "$TOKEN_A")
+expect "$code" 201 "新建只关联「外祖父」的条目（冲突预览中的转移项）"
+IID2=$(json 'd.item.id' < "$WORK/body")
+
+code=$(req GET "$V1/families/$FID/people/$PID2/merge-preview?targetPersonId=$PID" "$JAR_A" "" "$TOKEN_A")
+expect "$code" 200 "合并预览返回受影响条目"
+PREVIEW_CONFLICTS=$(json 'd.preview.conflictCount' < "$WORK/body")
+PREVIEW_MOVED=$(json 'd.preview.movedCount' < "$WORK/body")
+if [ "$PREVIEW_CONFLICTS" = "1" ] && [ "$PREVIEW_MOVED" = "1" ]; then
+  ok "预览正确识别 1 条冲突、1 条转移"
+else
+  bad "预览统计异常（冲突 $PREVIEW_CONFLICTS / 转移 $PREVIEW_MOVED）"
+fi
+
+code=$(req POST "$V1/families/$FID/people/$PID2/merge" "$JAR_A" "{\"targetPersonId\":\"$PID\"}" "$TOKEN_A")
+expect "$code" 200 "执行合并"
+# 合并后目标人物同时拿到两个条目；冲突条目的两条备注被并列保留
+TARGET_ITEMS=$(json 'd.person.items.length' < "$WORK/body")
+if [ "$TARGET_ITEMS" = "2" ]; then ok "合并后目标人物关联 2 件物品"; else bad "合并后条目数异常：$TARGET_ITEMS"; fi
+MERGED_NOTE=$(json "d.person.items.find(i=>i.id===process.argv[1]).note" "$IID" < "$WORK/body")
+case "$MERGED_NOTE" in
+  *"外公从木器社退休那年送的"*"档案卡上写作外祖父"*) ok "冲突关联的关系说明并列保留：$MERGED_NOTE" ;;
+  *) bad "冲突备注合并异常：$MERGED_NOTE" ;;
+esac
+# 来源名字/别名并入目标别名
+if [ "$(json 'd.person.aliases.includes("外祖父")?"yes":"no"' < "$WORK/body")" = "yes" ]; then ok "来源人物名字并入目标别名"; else bad "来源名字未并入别名"; fi
+
+# 来源人物详情返回 409 + 合并去向（历史可追溯）
+code=$(req GET "$V1/families/$FID/people/$PID2" "$JAR_A" "" "$TOKEN_A")
+expect "$code" 409 "已合并人物详情返回 409"
+if [ "$(json 'd.error.details.mergedInto.id' < "$WORK/body")" = "$PID" ]; then ok "409 详情给出合并去向"; else bad "缺少合并去向"; fi
+
+# 列表默认不含已合并人物
+code=$(req GET "$V1/families/$FID/people" "$JAR_A" "" "$TOKEN_A")
+if [ "$(json 'd.people.find(p=>p.id===process.argv[1])?"found":"gone"' "$PID2" < "$WORK/body")" = "gone" ]; then ok "人物列表默认隐藏已合并人物"; else bad "已合并人物仍出现在默认列表"; fi
+
+# 撤销合并
+code=$(req GET "$V1/families/$FID/people/$PID/merges" "$JAR_A" "" "$TOKEN_A")
+expect "$code" 200 "读取人物合并历史"
+MERGE_ID=$(json 'd.merges.find(m=>!m.undone).id' < "$WORK/body")
+if [ -n "$MERGE_ID" ]; then ok "合并历史含 1 条生效记录"; else bad "合并历史缺少生效记录"; fi
+code=$(req POST "$V1/families/$FID/people/merges/$MERGE_ID/undo" "$JAR_A" '{}' "$TOKEN_A")
+expect "$code" 200 "撤销合并"
+if [ "$(json 'd.restoredId' < "$WORK/body")" = "$PID2" ]; then ok "撤销后返回还原的来源人物"; else bad "撤销返回异常"; fi
+
+# 还原后：来源人物复活、关联条目回到来源、冲突条目两边各一条
+code=$(req GET "$V1/families/$FID/people/$PID2" "$JAR_A" "" "$TOKEN_A")
+expect "$code" 200 "来源人物撤销后可重新访问"
+if [ "$(json 'd.person.items.length' < "$WORK/body")" = "2" ]; then ok "来源人物关联条目还原（2 件）"; else bad "来源人物条目还原异常：$(json 'd.person.items.length' < "$WORK/body")"; fi
+code=$(req GET "$V1/families/$FID/people/$PID" "$JAR_A" "" "$TOKEN_A")
+expect "$code" 200 "目标人物撤销后可访问"
+if [ "$(json 'd.person.items.length' < "$WORK/body")" = "1" ]; then ok "目标人物只剩自己原来的 1 件（冲突关联拆回）"; else bad "目标人物条目数异常：$(json 'd.person.items.length' < "$WORK/body")"; fi
+# 合并记录标记为已撤销（历史仍在）
+if [ "$(json "d.person.merges.find(m=>m.id===process.argv[1]).undone" "$MERGE_ID" < "$WORK/body")" = "true" ]; then ok "合并记录保留并标记为已撤销"; else bad "合并记录状态异常"; fi
+# 已撤销的合并不能重复撤销
+code=$(req POST "$V1/families/$FID/people/merges/$MERGE_ID/undo" "$JAR_A" '{}' "$TOKEN_A")
+expect "$code" 409 "重复撤销被拒绝"
 
 # ---------- 5. 媒体上传 ----------
 step "5/10 上传图片与音频"

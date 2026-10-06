@@ -142,6 +142,7 @@ model Family {
   members    FamilyMember[]
   invites    Invite[]
   people     Person[]
+  merges     PersonMerge[]
   items      Item[]
   shareLinks ShareLink[]
   auditLogs  AuditLog[]
@@ -189,7 +190,9 @@ model Person {
   id            String    @id @default(cuid())
   familyId      String    @map("family_id")
   name          String
+  aliases       String[]  @default([])
   relation      String?
+  relationNote  String?   @map("relation_note")
   birthYear     Int?      @map("birth_year")
   deathYear     Int?      @map("death_year")
   bio           String?
@@ -205,6 +208,32 @@ model Person {
 
   @@index([familyId, name])
   @@map("people")
+}
+
+/// 人物合并记录：每次合并都完整快照「来源人物 + 关联条目」，
+/// 让合并可以被撤销、历史关联可以追溯还原。
+model PersonMerge {
+  id         String   @id @default(cuid())
+  familyId   String   @map("family_id")
+  sourceId   String   @map("source_id")
+  sourceName String   @map("source_name")
+  targetId   String   @map("target_id")
+  targetName String   @map("target_name")
+  /// 合并时来源人物的完整档案快照（含 aliases、relation、生卒年等）
+  sourceSnapshot Json
+  /// 关联条目快照：每条含 linkId/itemId/role/note，以及冲突标记
+  linksSnapshot  Json
+  undoneAt   DateTime? @map("undone_at")
+  undoneById String?   @map("undone_by_id")
+  createdBy  String    @map("created_by")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([familyId, createdAt])
+  @@index([sourceId])
+  @@index([targetId, createdAt])
+  @@map("person_merges")
 }
 
 model Item {
@@ -256,6 +285,8 @@ model ItemPerson {
   itemId   String     @map("item_id")
   personId String     @map("person_id")
   role     PersonRole @default(source)
+  /// 这条关联上的关系描述，例如「外公从木器社退休那年送的」
+  note     String?
 
   item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
   person Person @relation(fields: [personId], references: [id], onDelete: Cascade)

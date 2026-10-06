@@ -26,7 +26,7 @@ interface FormState {
   visibility: Visibility;
   condition: string;
   storageLocation: string;
-  people: { personId: string; role: PersonRole }[];
+  people: { personId: string; role: PersonRole; note: string }[];
 }
 
 const EMPTY: FormState = {
@@ -81,7 +81,7 @@ function fromItem(item: ItemDetail): FormState {
     visibility: item.visibility,
     condition: item.condition ?? '',
     storageLocation: item.storageLocation ?? '',
-    people: item.people.map((p) => ({ personId: p.personId, role: p.role })),
+    people: item.people.map((p) => ({ personId: p.personId, role: p.role, note: p.note ?? '' })),
   };
 }
 
@@ -172,7 +172,7 @@ export function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
       }),
     onSuccess: async (data) => {
       await queryClient.invalidateQueries({ queryKey: ['people', fid] });
-      setForm((prev) => ({ ...prev, people: [...prev.people, { personId: data.person.id, role: 'source' }] }));
+      setForm((prev) => ({ ...prev, people: [...prev.people, { personId: data.person.id, role: 'source', note: '' }] }));
       setNewPerson({ name: '', relation: '' });
       setShowNewPerson(false);
       push(`已加入人物「${data.person.name}」`, 'success');
@@ -331,43 +331,60 @@ export function ItemFormPage({ mode }: { mode: 'create' | 'edit' }) {
               {people.data.people.map((p) => {
                 const selected = form.people.find((x) => x.personId === p.id);
                 return (
-                  <div key={p.id} className="row" style={{ marginBottom: 6, gap: 'var(--space-2)' }}>
-                    <label className="row" style={{ gap: 6, minWidth: 160, cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(selected)}
-                        onChange={(e) => {
-                          set(
-                            'people',
-                            e.target.checked
-                              ? [...form.people, { personId: p.id, role: 'source' }]
-                              : form.people.filter((x) => x.personId !== p.id),
-                          );
-                        }}
-                      />
-                      <span>
-                        {p.name}
-                        {p.relation ? <span className="muted">（{p.relation}）</span> : null}
-                      </span>
-                    </label>
+                  <div key={p.id} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: '1px dashed var(--line)' }}>
+                    <div className="row" style={{ gap: 'var(--space-2)' }}>
+                      <label className="row" style={{ gap: 6, minWidth: 160, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(selected)}
+                          onChange={(e) => {
+                            set(
+                              'people',
+                              e.target.checked
+                                ? [...form.people, { personId: p.id, role: 'source', note: '' }]
+                                : form.people.filter((x) => x.personId !== p.id),
+                            );
+                          }}
+                        />
+                        <span>
+                          {p.name}
+                          {p.aliases.length ? <span className="muted">（{p.aliases[0]}）</span> : p.relation ? <span className="muted">（{p.relation}）</span> : null}
+                        </span>
+                      </label>
+                      {selected ? (
+                        <Select
+                          aria-label={`${p.name} 的关联方式`}
+                          style={{ maxWidth: 160 }}
+                          value={selected.role}
+                          onChange={(e) =>
+                            set(
+                              'people',
+                              form.people.map((x) => (x.personId === p.id ? { ...x, role: e.target.value as PersonRole } : x)),
+                            )
+                          }
+                        >
+                          {(Object.keys(PERSON_ROLE_LABELS) as PersonRole[]).map((r) => (
+                            <option key={r} value={r}>
+                              {PERSON_ROLE_LABELS[r]}
+                            </option>
+                          ))}
+                        </Select>
+                      ) : null}
+                    </div>
                     {selected ? (
-                      <Select
-                        aria-label={`${p.name} 的关联方式`}
-                        style={{ maxWidth: 160 }}
-                        value={selected.role}
+                      <TextInput
+                        aria-label={`${p.name} 的关系说明`}
+                        placeholder="这条关联的具体说明（选填），例如「外公从木器社退休那年送的」"
+                        value={selected.note}
+                        maxLength={200}
                         onChange={(e) =>
                           set(
                             'people',
-                            form.people.map((x) => (x.personId === p.id ? { ...x, role: e.target.value as PersonRole } : x)),
+                            form.people.map((x) => (x.personId === p.id ? { ...x, note: e.target.value } : x)),
                           )
                         }
-                      >
-                        {(Object.keys(PERSON_ROLE_LABELS) as PersonRole[]).map((r) => (
-                          <option key={r} value={r}>
-                            {PERSON_ROLE_LABELS[r]}
-                          </option>
-                        ))}
-                      </Select>
+                        style={{ marginTop: 6, maxWidth: 480 }}
+                      />
                     ) : null}
                   </div>
                 );
@@ -498,6 +515,6 @@ function buildPayload(form: FormState) {
       .filter(Boolean)
       .slice(0, 20),
     visibility: form.visibility,
-    people: form.people,
+    people: form.people.map((p) => ({ personId: p.personId, role: p.role, note: p.note.trim() || null })),
   };
 }
